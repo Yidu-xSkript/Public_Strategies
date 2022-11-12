@@ -13,10 +13,11 @@ The way to trade this is:
 - set an alert on the higher timeframe (30m, 1hr, 4hr, etc.)
 - when an alert is triggered, using the rule of 30, go down to the lower timeframe. example for 30m TF (30*(60/30) => 60sec or 1min)
 - wait for a pullback on the selected lower timeframe (you can use fib retracement tool to see the retracement) or just use the half trend (wait for it to change color from red to green or green to red). You can use whatever method of pullback confirmation you want. 
+
 Added options to view atr channels so that we're able to identify the move after the pullbacks. close < or > the atr channels.
 I've also used the fib retracement tool for more confirmation. 
-![Half-Index-On-Chart](https://res.cloudinary.com/xplorestate/image/upload/v1668243178/Screenshot_2022-11-12_115248_apyksv.png)
-![Half-Index-Settings](https://res.cloudinary.com/xplorestate/image/upload/v1668243201/Screenshot_2022-11-12_115312_w8varh.png)
+
+![Half-Index-On-Chart](https://res.cloudinary.com/xplorestate/image/upload/v1668245657/Screenshot_2022-11-12_123358_nh3cfg.png)
 
 ## Happy Trail
 The strategy consists of RSI , HTF stochastic RSI , consolidation range identifier, TSI, and twin range. change the options as you like to see which works for you.
@@ -45,7 +46,7 @@ The strategy consists of RSI (Confirmation), Optional stochastic RSI (Confirmati
 
 The indicator prints out a sneaker every time the conditions are met. It generally looks for a fractal breakout and at the same time checks for multiple confluences ( RSI , TSV, a Baseline - For Trend direction)
 
-### Settings
+#### Settings
 
 Allow Signal Repainting (bool) : Helps if you trade in the lower timeframes to get in quicker.
 
@@ -70,12 +71,13 @@ Stochastic RSI is optional
 
 - Consolidation range identifier, support and resistance do not play a part in the signal generating process but they play major roles in the strategy. You can click on "show support & resistance" or "show consolidation zones" to display them on your chart.
 - You can also allow sessions in order to know in which session you're trading in. 
+
 ![StairMaster-On-Chart](https://res.cloudinary.com/xplorestate/image/upload/v1668243612/Screenshot_2022-11-12_115959_vlhnml.png)
 
 ## The Note
 The Note is a buy/Sell Signal Providing Indicator with alerts.
 
-### Strategy Rules
+#### Strategy Rules
 - Setup your alerts wait for a signal on a higher timeframe (eg. 30m, 1hr, 4hr)
 - Go into a lower timeframe (eg. 1m, 5m, 15m - depends on the higher timeframe. 1hr -> 5m, ...) & wait for a pullback - if the pullback goes below the middle ema then the setup is not valid anymore
 - enter once the first coral trend shifts (green to red | red to green) signifying that the market is most likely about to go in your direction.
@@ -93,6 +95,7 @@ The Outback is a strategy taken from a trading community called "the trading flo
 - Additional filters like a slow & fast moving averages (multiple types), and ATR Filtering
 - optimize the settings to get a good result
 - It prints a kangaroo emoji anytime a setup is found
+
 ![The-Outback-On-Chart](https://res.cloudinary.com/xplorestate/image/upload/v1668245355/Screenshot_2022-11-12_122851_lwynzz.png)
 
 ## TMA Session
@@ -103,5 +106,6 @@ Strategy Rules
    - Trade the first signal inside the selected session (Don't trade other signals. if the trade is a loss or win don't trade others after that.)
    - Take TP on fixed 1:2.5 RR or on S&R or S&D Zones
    - Put your SL on the ATR circle
-   - There are days you will not find any trades. so don't try to force it. 
+   - There are days you will not find any trades. so don't try to force it.
+ 
 ![TMASession5m-On-Chart](https://res.cloudinary.com/xplorestate/image/upload/v1668244998/Screenshot_2022-11-12_122305_p4etdx.png)
