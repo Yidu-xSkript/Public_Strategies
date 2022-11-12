@@ -1,0 +1,188 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Yidu_A_S_O_T_L_J_C
+
+//@version=5
+indicator("The Outback", overlay = true)
+
+allowRepainting = input(true, "Allow Signal Repainting", group="Repainting Settings")
+filter = input(true, "Filter repeat signals until an opposing signal is printed", group="General Settings")
+repaint = allowRepainting ? true : barstate.isconfirmed
+
+slowmaSrc = input.source(close, "Source", inline="slowma", group="Slow MA")
+slowmaLength = input(200, "Length", inline="slowma", group="Slow MA")
+slowmaType = input.string("Exponential", "Type", options=["Smoothed", "Linear", "Exponential", "Weighted", "Simple", "Trend Regularity Adaptive", "Arnaud Legoux", "Hull", "Double Exponential", "Triple Exponential"], inline="slowma", group="Slow MA")
+
+showFastMA = input(true, "Show Fast MA", group="Fast MA")
+FastMAFilter = input(true, "Use Fast MA as consolidation filter", group="Fast MA")
+fastmaBias = input(true, "Use fast MA compared to slow MA for directional bias", group="Fast MA")
+fastmaSrc = input.source(close, "Source", inline="fastma", group="Fast MA")
+fastmaLength = input(14, "Length", inline="fastma", group="Fast MA")
+fastmaType = input.string("Smoothed", "Type", options=["Smoothed", "Linear", "Exponential", "Weighted", "Simple", "Trend Regularity Adaptive", "Arnaud Legoux", "Hull", "Double Exponential", "Triple Exponential"], inline="fastma", group="Fast MA")
+
+atrG = "ATR Filtering"
+atrLength = input(21, "ATR Length", group=atrG)
+atrFactor = input.float(3.0, "ATR Scale Factor", group=atrG)
+showAtr = input(true, "Show ATR Filter", group=atrG)
+
+rsiSrc = input.source(hlcc4, "Source", inline="rsi", group="RSI Settings")
+rsiLength = input(100, "Length", inline="rsi", group="RSI Settings")
+
+rsiMaType = input.string("Simple", "MA Type", options=["Smoothed", "Linear", "Exponential", "Weighted", "Simple", "Trend Regularity Adaptive", "Arnaud Legoux", "Hull", "Double Exponential", "Triple Exponential"], inline="rsima", group="RSI MA Settings")
+rsiMaLength = input(125, "MA Length", inline="rsima", group="RSI MA Settings")
+
+useHtf = input(true, title="Use alternate timeframe", inline = "hull", group = "RSI Hull MA Settings")
+htf = input.timeframe("30", title="Timeframe", inline = "hull", group = "RSI Hull MA Settings")
+modeSwitch = input.string("Hma", title="Hull Variation", options=["Hma", "Thma", "Ehma"], group = "RSI Hull MA Settings")
+hullLength = input(227, title='MA Length', group = "RSI Hull MA Settings")
+lengthMult = input(2.0, title="Length multiplier", group = "RSI Hull MA Settings")
+
+backtestingCompatible = input(false, "Backtesting Compatible", "Enable this plot 1 for buys and 2 for sell so you can use this indicator with the backtest script", group="Backtest")
+
+
+smma(src, length) =>
+    smma = 0.0
+    sma = ta.sma(src, length)
+    smma := na(smma[1]) ? sma : (smma[1] * (length - 1) + src) / length
+    smma
+
+trama(src, length) =>
+    ama = 0.
+    hh = math.max(math.sign(ta.change(ta.highest(length))),0)
+    ll = math.max(math.sign(ta.change(ta.lowest(length))*-1),0)
+    tc = math.pow(ta.sma(hh or ll ? 1 : 0,length),2)
+    ama := nz(ama[1]+tc*(src-ama[1]),src)
+    ama
+
+hma(src, length) =>
+    ta.wma(2 * ta.wma(src, length / 2) - ta.wma(src, length), math.round(math.sqrt(length)))
+
+dema(src, length) =>
+    ema = ta.ema(src, length)
+    dema = 2 * ema - ta.ema(ema, length)
+    dema
+
+tema(src, length) =>
+    ema = ta.ema(src, length)
+    ema2 = ta.ema(ema, length)
+    tema = 3 * (ema - ema2) + ta.ema(ema2, length)
+    tema
+
+ma(type, length, src) =>
+    result = type == "Smoothed" ? smma(src, length) : 
+      type == "Linear" ? ta.linreg(src, length, 0) : 
+      type == "Exponential" ? ta.ema(src, length) : 
+      type == "Weighted" ? ta.wma(src, length) : 
+      type == "Simple" ? ta.sma(src, length) :
+      type == "Trend Regularity Adaptive" ? trama(src, length) :
+      type == "Arnaud Legoux" ? ta.alma(src, length, 0.86, 5) : 
+      type == "Hull" ? hma(src, int(length * lengthMult)) : 
+      type == "Double Exponential" ? dema(src, length) : 
+      type == "Triple Exponential" ? tema(src, length) : ta.sma(src, length)
+    result
+
+// RSI & Hull
+up = ta.rma(math.max(ta.change(rsiSrc), 0), rsiLength)
+down = ta.rma(-math.min(ta.change(rsiSrc), 0), rsiLength)
+rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
+rsiMA = ma(rsiMaType, rsiMaLength, rsi)
+
+HMA(_src, _length) =>  ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.round(math.sqrt(_length)))
+EHMA(_src, _length) =>  ta.ema(2 * ta.ema(_src, _length / 2) - ta.ema(_src, _length), math.round(math.sqrt(_length)))
+THMA(_src, _length) =>  ta.wma(ta.wma(_src,_length / 3) * 3 - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+    
+Mode(modeSwitch, src, len) =>
+      modeSwitch == "Hma"  ? HMA(src, len) :
+      modeSwitch == "Ehma" ? EHMA(src, len) : 
+      modeSwitch == "Thma" ? THMA(src, len/2) : na
+
+_hull = Mode(modeSwitch, rsi, int(hullLength * lengthMult))
+HULL = useHtf ? request.security(syminfo.ticker, htf, _hull) : _hull
+
+rsiCrossoverMA = ta.crossover(rsi, rsiMA)
+rsiCrossunderMA = ta.crossunder(rsi, rsiMA)
+
+rsiCrossoverHull = ta.crossover(rsi, HULL)
+rsiCrossunderHull = ta.crossunder(rsi, HULL)
+
+rsiHullUpCondition = rsiMA > HULL ? rsiCrossoverMA and rsi > HULL : rsiCrossoverHull and rsi > rsiMA
+rsiHullDnCondition = rsiMA < HULL ? rsiCrossunderMA and rsi < HULL : rsiCrossunderHull and rsi < rsiMA
+
+// Slow MA
+slowma = ma(slowmaType, slowmaLength, slowmaSrc)
+plot(slowma, "Slow MA", color.yellow, 2)
+
+slowmaUpCondition = close > slowma
+slowmaDnCondition = close < slowma
+
+// Fast MA
+fastma = ma(fastmaType, fastmaLength, fastmaSrc)
+plot(showFastMA ? fastma : na, "Fast MA", color.red, 2)
+
+ph = ta.highest(20)
+pl = ta.lowest(20)
+center = (ph + pl) / 2
+
+fastmaUpCondition = fastmaBias ? close > fastma and fastma > slowma : close > fastma
+fastmaDnCondition = fastmaBias ? close < fastma and fastma < slowma : close < fastma
+
+fastmaUpCondition := FastMAFilter ? fastmaUpCondition and fastma < center : fastmaUpCondition
+fastmaDnCondition := FastMAFilter ? fastmaDnCondition and fastma > center : fastmaDnCondition
+
+// ATR Filter
+volStop(src, atrlen, atrfactor) =>
+    var max = src
+    var min = src
+    var uptrend = true
+    var stop = 0.0
+    atrM = nz(ta.atr(atrlen) * atrfactor, ta.tr)
+    max := math.max(max, src)
+    min := math.min(min, src)
+    stop := nz(uptrend ? math.max(stop, max - atrM) : math.min(stop, min + atrM), src)
+    uptrend := src - stop >= 0.0
+    if uptrend != nz(uptrend[1], true)
+        max := src
+        min := src
+        stop := uptrend ? max - atrM : min + atrM
+    [stop, uptrend]
+
+[stop, uptrend] = volStop(close, atrLength, atrFactor)
+
+plot(showAtr ? stop : na, "ATR Filter", uptrend ? color.white : color.lime, 2)
+
+atrUpCondition = showAtr ? close > stop : true
+atrDnCondition = showAtr ? close < stop : true
+
+// Signal
+var bool upSignalIssued = false
+var bool dnSignalIssued = false
+
+upSignal = atrUpCondition and fastmaUpCondition and slowmaUpCondition and rsiHullUpCondition and repaint and not upSignalIssued
+dnSignal = atrDnCondition and fastmaDnCondition and slowmaDnCondition and rsiHullDnCondition and repaint and not dnSignalIssued
+
+if upSignal and filter
+    upSignalIssued := true
+
+if dnSignal and filter
+    dnSignalIssued := true
+
+if upSignalIssued and slowmaDnCondition
+    upSignalIssued := false
+
+if dnSignalIssued and slowmaUpCondition
+    dnSignalIssued := false
+
+plotchar(upSignal, "Buy", backtestingCompatible ? "1" : "🦘", location.belowbar, size=size.tiny)
+plotchar(dnSignal, "Sell", backtestingCompatible ? "2" : "🦘", location.abovebar, size=size.tiny)
+
+// Alert
+if upSignal
+    if repaint
+        alert("The Outback - Buy Signal", alert.freq_once_per_bar)
+    else
+        alert("The Outback - Buy Signal", alert.freq_once_per_bar_close)
+
+if dnSignal
+    if repaint
+        alert("The Outback - Sell Signal", alert.freq_once_per_bar)
+    else
+        alert("The Outback - Sell Signal", alert.freq_once_per_bar_close)

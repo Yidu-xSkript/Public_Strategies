@@ -1,0 +1,109 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Yidu_A_S_O_T_L_J_C
+
+// Strategy Rules
+// ------------------
+// candle should close above the higher ema or close below the lower ema on the higher timeframe & CCI should be > 100 or < -100 -> this will generate a signal which includes alerts if you want.
+// go into a lower timeframe & wait for a pullback - if the pullback goes below the middle ema then the setup is not valid anymore
+// enter once the first coral trend shifts (green to red | red to green) signifying that the market is about go in your direction.
+// Set your stoploss on the atr band(circle). enable the ATR to display it on your chart.
+// Trade Management - After 2 Fractal BOS's move your SL to breakeven
+// Exit trade when a candle closes below the middle 34 period ema
+
+//@version=5
+indicator("The Note", overlay=true)
+
+src = close
+
+// MA
+string emaGroup = "Config . EMA"
+ema = input.int(34, "EMA1 Length", group=emaGroup)
+
+// Coral Trend
+string coralGroup = "Config . Coral Trend"
+sm =input(10, title="Smoothing Period", group=coralGroup)
+cd = input(0.5, title="Constant D", group=coralGroup)
+
+// CCI
+string cciGroup = "Config . CCI"
+length = input.int(20, minval=1, group=cciGroup)
+_src = input(hlc3, title="Source", group=cciGroup)
+
+// ATR
+string atrGroup = "Config . ATR"
+atrlength = input.int(title="Length", defval=14, minval=1, group=atrGroup)
+atrmult = input.float(1.0, "Multiplier", group=atrGroup)
+enableATR = input(false, "Display ATR SL",  group=atrGroup)
+
+// ema
+ema1 = ta.ema(high, ema)
+ema2 = ta.ema(src, ema)
+ema3 = ta.ema(low, ema)
+
+emaUpCondition = src > ema1
+emaDnCondition = src < ema3
+
+// Coral Trend
+di = (sm - 1.0) / 2.0 + 1.0
+c1 = 2 / (di + 1.0)
+c2 = 1 - c1
+c3 = 3.0 * (cd * cd + cd * cd * cd)
+c4 = -3.0 * (2.0 * cd * cd + cd + cd * cd * cd)
+c5 = 3.0 * cd + 1.0 + cd * cd * cd + 3.0 * cd * cd
+i1 = 0.0, i2 = 0.0, i3 = 0.0, i4 = 0.0, i5 = 0.0, i6 = 0.0
+i1 := c1*src + c2*nz(i1[1])
+i2 := c1*i1 + c2*nz(i2[1])
+i3 := c1*i2 + c2*nz(i3[1])
+i4 := c1*i3 + c2*nz(i4[1])
+i5 := c1*i4 + c2*nz(i5[1])
+i6 := c1*i5 + c2*nz(i6[1])
+
+bfr = -cd*cd*cd*i6 + c3*(i5) + c4*(i4) + c5*(i3)
+
+// CCI
+ma = ta.sma(_src, length)
+cci = (_src - ma) / (0.015 * ta.dev(_src, length))
+
+cciUpCondition = cci > 100
+cciDnCondition = cci < -100
+
+// ATR
+SLU = low - ta.rma(ta.tr(true), atrlength) * atrmult
+SLD = ta.rma(ta.tr(true), atrlength) * atrmult + high
+
+// signal
+var bool upSignalIssued = false
+var bool dnSignalIssued = false
+
+confirmed = barstate.isconfirmed
+
+upSignal = cciUpCondition and emaUpCondition and confirmed and not upSignalIssued
+dnSignal = cciDnCondition and emaDnCondition and confirmed and not dnSignalIssued
+
+if upSignal
+    upSignalIssued := true
+    alert("The Note (Buy)", alert.freq_once_per_bar_close)
+    
+if dnSignal
+    dnSignalIssued := true
+    alert("The Note (Sell)", alert.freq_once_per_bar_close)
+    
+if upSignalIssued and src < ema2
+    upSignalIssued := false
+    
+if dnSignalIssued and src > ema2
+    dnSignalIssued := false
+    
+// plot
+bfrC = bfr > nz(bfr[1]) ? color.green : bfr < nz(bfr[1])  ? color.red : color.blue
+plot(bfr, title="Trend", linewidth=3, style=plot.style_circles, color=bfrC)
+
+plot(ema1, "EMA1", color.new(color.orange, 0))
+plot(ema2, "EMA2", color.new(color.orange, 20))
+plot(ema3, "EMA3", color.new(color.orange, 50))
+
+plotshape(upSignal ? bar_index : na, title="Buy", text="Up", location=location.belowbar, style=shape.triangleup, size=size.small, color=color.green, textcolor=color.white)
+plotshape(dnSignal ? bar_index : na, title="Sell", text="Dn", location=location.abovebar, style=shape.triangledown, size=size.small, color=color.red, textcolor=color.white)
+
+plot(enableATR ? SLU : na, title = "ATR Up Stop Loss", color=color.black, style=plot.style_circles, linewidth=2)
+plot(enableATR ? SLD : na, title = "ATR Dn Stop Loss", color=color.black, style=plot.style_circles, linewidth=2)

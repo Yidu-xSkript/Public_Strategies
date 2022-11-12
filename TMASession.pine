@@ -1,0 +1,191 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Yidu_A_S_O_T_L_J_C
+
+// Strategy Rules
+// 1) Draw S&R or SND zones -> have an understanding of the higher timeframes (1hr TF) where the structure is and where it's heading. 
+// 2) Go into a lower timeframe (5m TF) wait for signal (set an alert) on the session you chose
+// 3) Trade the first signal inside the selected session (don't trade other signals. if the trade is a loss or win don't trade others after that.)
+// 4) Take TP on fixed 1:2.5RR or on support & resistance or supply & demand zones
+// 5) SL on the ATR circle
+// 6) there are days that you will not find any trades. so don't try to force it.
+
+//@version=5
+indicator("TMA Session 5M", overlay=true)
+
+// MA
+string maGroup = "Config . MA"
+trendFill = input(title="Show Trend Fill", defval=true, group=maGroup)
+
+// Trade Session
+ts = input(title="Show Trade Session", defval=true, group = "Trade Session")
+
+tz = input.string(title="Timezone", defval="America/Chicago", options=["Asia/Sydney", "Asia/Tokyo", "Europe/Frankfurt", "Europe/London", "UTC", "America/New_York", "America/Chicago"], group = "Trade Session")
+label = input.string(title="Label", defval="CME Open", tooltip="For easy identification", group = "Trade Session")
+
+startHour = input.int(title="analysis Start hour", defval=7, minval=0, maxval=23, group = "Trade Session")
+startMinute = input.int(title="analysis Start minute", defval=00, minval=0, maxval=59, group = "Trade Session")
+
+startHour2 = input.int(title="Session Start hour", defval=8, minval=0, maxval=23, group = "Trade Session")
+startMinute2 = input.int(title="Session Start minute", defval=30, minval=0, maxval=59, group = "Trade Session")
+endHour2 = input.int(title="Session End hour", defval=12, minval=0, maxval=23, group = "Trade Session")
+endMinute2 = input.int(title="Session End minute", defval=0, minval=0, maxval=59, group = "Trade Session")
+
+rangeColor = input(title="Color", defval=#1976d21f, group = "Trade Session")
+showMon = input(title="Monday", defval=true, group = "Trade Session")
+showTue = input(title="Tuesday",  defval=true, group = "Trade Session")
+showWed = input(title="Wednesday", defval=true, group = "Trade Session")
+showThu = input(title="Thursday", defval=true, group = "Trade Session")
+showFri = input(title="Friday", defval=true, group = "Trade Session")
+showSat = input(title="Saturday", defval=false, group = "Trade Session")
+showSun = input(title="Sunday", defval=false, group = "Trade Session")
+
+// ATR
+string atrGroup = "Config . ATR SL"
+length = input.int(title="Length", defval=14, minval=1, group=atrGroup)
+m = input(1, "Multiplier", group=atrGroup)
+
+// UI
+string uiGroup = "Config . UI"
+uiType = input.string("Dark", title="UI mode", group=uiGroup, options=["Light", "Dark"])
+showTheFirstSignalOnly = input.bool(false, title="Show The First Signal Only", tooltip="Works only if you're trading with sessions", group=uiGroup)
+
+src = close
+
+// SMA
+smma1 = 0.0
+sma_1 = ta.sma(src, 21)
+smma1 := na(smma1[1]) ? sma_1 : (smma1[1] * (21 - 1) + src) / 21
+
+smma2 = 0.0
+sma_2 = ta.sma(src, 50)
+smma2 := na(smma2[1]) ? sma_2 : (smma2[1] * (50 - 1) + src) / 50
+
+smma3 = 0.0
+sma_3 = ta.sma(src, 200)
+smma3 := na(smma3[1]) ? sma_3 : (smma3[1] * (200 - 1) + src) / 200
+
+// Trend Fill
+ema2 = ta.ema(src, 2)
+
+
+// 3 Line Strike
+bearSig = close[3] > open[3] and close[2] > open[2] and close[1] > open[1] and close < open[1]
+bullSig = close[3] < open[3] and close[2] < open[2] and close[1] < open[1] and close > open[1]
+
+openBarPrevious = open[1]
+closeBarPrevious = close[1]
+openBarCurrent = open
+closeBarCurrent = close
+
+bullishEngulfing = openBarCurrent <= closeBarPrevious and openBarCurrent < openBarPrevious and 
+   closeBarCurrent > openBarPrevious
+
+bearishEngulfing = openBarCurrent >= closeBarPrevious and openBarCurrent > openBarPrevious and 
+   closeBarCurrent < openBarPrevious
+
+// Trade Session
+tzYear = year(time, tz)
+tzMonth = month(time, tz)
+tzDay = dayofmonth(time, tz)
+tzDayOfWeek = dayofweek(time, tz)
+startTime = timestamp(tz, tzYear, tzMonth, tzDay, startHour, startMinute)
+endTime = timestamp(tz, tzYear, tzMonth, tzDay, endHour2, endMinute2)
+
+active = if startTime <= time and time <= endTime and ts
+    if tzDayOfWeek == dayofweek.monday and showMon
+        true
+    else if tzDayOfWeek == dayofweek.tuesday and showTue
+        true
+    else if tzDayOfWeek == dayofweek.wednesday and showWed
+        true
+    else if tzDayOfWeek == dayofweek.thursday and showThu
+        true
+    else if tzDayOfWeek == dayofweek.friday and showFri
+        true
+    else if tzDayOfWeek == dayofweek.saturday and showSat
+        true
+    else if tzDayOfWeek == dayofweek.sunday and showSun
+        true
+    else
+        false
+else
+    false
+
+startTime2 = timestamp(tz, tzYear, tzMonth, tzDay, startHour2, startMinute2)
+endTime2 = timestamp(tz, tzYear, tzMonth, tzDay, endHour2, endMinute2)
+
+active2 = if startTime2 <= time and time <= endTime2 and ts
+    if tzDayOfWeek == dayofweek.monday and showMon
+        true
+    else if tzDayOfWeek == dayofweek.tuesday and showTue
+        true
+    else if tzDayOfWeek == dayofweek.wednesday and showWed
+        true
+    else if tzDayOfWeek == dayofweek.thursday and showThu
+        true
+    else if tzDayOfWeek == dayofweek.friday and showFri
+        true
+    else if tzDayOfWeek == dayofweek.saturday and showSat
+        true
+    else if tzDayOfWeek == dayofweek.sunday and showSun
+        true
+    else
+        false
+else
+    false
+    
+tmaUpCondition = smma1 > smma2 and smma2 > smma3 and smma1 > smma3
+tmaDnCondition = smma1 < smma2 and smma2 < smma3 and smma1 < smma3
+
+if ts
+    tmaUpCondition := active and tmaUpCondition
+    tmaDnCondition := active and tmaDnCondition
+
+upCondition = bullishEngulfing and tmaUpCondition or bullSig and tmaUpCondition
+dnCondition = bearishEngulfing and tmaDnCondition or bearSig and tmaDnCondition
+
+// RSI
+up = ta.rma(math.max(ta.change(src), 0), 14)
+down = ta.rma(-math.min(ta.change(src), 0), 14)
+rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
+
+rsiUpCondition = rsi > 50
+rsiDnCondition = rsi < 50
+
+// ATR SL
+SLD = ta.rma(ta.tr(true), length) * m + high
+SLU = low - ta.rma(ta.tr(true), length) * m
+
+// signal
+var bool signalIssued = false
+
+upSignal = upCondition and rsiUpCondition and barstate.isconfirmed
+dnSignal = dnCondition and rsiDnCondition and barstate.isconfirmed
+
+upSignal := showTheFirstSignalOnly and ts ? not signalIssued and upSignal : upSignal
+dnSignal := showTheFirstSignalOnly and ts ? not signalIssued and dnSignal : dnSignal
+
+if upSignal or dnSignal
+    alert("TMA Session 5m (Buy | Sell) : Alert", alert.freq_once_per_bar_close)
+    signalIssued := true
+    
+if not active
+    signalIssued := false
+    
+
+// plot
+bgcolor(color=active2 ? rangeColor : na, title = "Session Background")
+bgcolor(color=active ? rangeColor : na, title = "Session Background")
+
+plot(smma1, color=uiType == "Light" ? color.black : color.white, linewidth=2, title="21 SMMA")
+plot(smma2, color=color.new(#6aff00,0), linewidth=2, title="50 SMMA")
+sma3plot = plot(smma3, color=color.new(#ff0500,0), linewidth=2, title="200 SMMA")
+ema2plot = plot(ema2, color=#2ecc71, style=plot.style_line, linewidth=1, title="EMA(2)", editable=false, display=display.none)
+
+fill(ema2plot, sma3plot, color=ema2 > smma3 and trendFill ? color.new(color.green, 85) : ema2 < smma3 and trendFill ? color.new(color.red, 85) : na, title = "Trend Fill")
+
+plot(upSignal ? SLU : na, title = "ATR Up Stop Loss", color=uiType == "Light" ? color.black : color.white, style=plot.style_circles, linewidth=2)
+plot(dnSignal ? SLD : na, title = "ATR Dn Stop Loss", color=uiType == "Light" ? color.black : color.white, style=plot.style_circles, linewidth=2)
+
+plotshape(upSignal ? bar_index : na, "Up", shape.triangleup, location.belowbar, color.green, size=size.tiny)
+plotshape(dnSignal ? bar_index : na, "Up", shape.triangledown, location.abovebar, color.red, size=size.tiny)

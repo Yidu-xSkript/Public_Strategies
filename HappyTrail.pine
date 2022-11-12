@@ -1,0 +1,315 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Yidu_A_S_O_T_L_J_C
+
+// This strategy belongs to @TheTradingFloor. I saw the strategy from "Christy Kinz Trading" Youtube channel and thought why not just code it.
+// She showed the strategy on the 15m TF and at the time of the video she said that the strategy has been tested only on Indices. Test it on forex, crypto to see if it works
+// Change some settings and see if it will work for you.
+// Play with the stoploss position
+// According to her it's a 1:1.5 RR strategy. -- Test it and see if it works
+// I use it on the 1m TF
+// This is the link to the video: https://www.youtube.com/watch?v=zGH6B08TFSs
+
+
+//@version=5
+indicator("Happy Trail", max_bars_back = 1100, overlay=true)
+
+// Confirmation
+allowRepainting = input(false, "Allow signal repainting", group="Repainting")
+
+// RSI
+string rsiGroup = "Config . RSI"
+rsiLengthInput = input(150, title="RSI Length", group=rsiGroup)
+maType = input.string("Linear", options=["TRAMA", "SMA", "EMA", "Linear"], group=rsiGroup)
+maLength = input(35, title="ma Length", group=rsiGroup)
+
+// Outback
+string outbackGroup = "Config . Outback"
+enableOutback = input(true, title="Enable Outback Filter", group=outbackGroup)
+rsiLengthInput1 = input.int(233, minval=1, title="RSI Length", group=outbackGroup)
+maLengthInput = input.int(89, title="MA Length", group=outbackGroup)
+length3 = input(144, title='Hull MA Length', group=outbackGroup)
+lengthMult = input(2.0, title="Hull Length multiplier", group=outbackGroup)
+
+// TRT
+string trtGroup = "Config . Twin Range"
+trtsrc = input.source(hlcc4, title="Source", group=trtGroup)
+per1 = input.int(defval=27, minval=1, title="Fast period", group=trtGroup)
+mult1 = input.float(defval=1.6, minval=0.1, title="Fast range", group=trtGroup)
+per2 = input.int(defval=100, minval=1, title="Slow period", group=trtGroup)
+mult2 = input.float(defval=3, minval=0.1, title="Slow range", group=trtGroup)
+
+// ATR - alternative trigger
+string atrGroup = "Config . ATR Trend detection"
+alternative = input(true, "Use Alternate Trend Detection Method", group=atrGroup)
+atrsrc = input.source(hlc3, "Source", group=atrGroup)
+atrlen = input.int(16, "Length Atr", group=atrGroup)
+mult  = input.float(2.4, "Multiplier Atr", step = 0.1, group=atrGroup)
+
+// TSI
+string tsiGroup = "Config . TSI"
+_long = input(title="Long Length", defval=15, group=tsiGroup)
+_short = input(title="Short Length", defval=4, group=tsiGroup)
+signal = input(title="Signal Length", defval=15, group=tsiGroup)
+
+// S&R
+string srGroup="Config . Support & Resistance"
+showSR = input(title="Show Supports & Resistances", defval=false, group=srGroup)
+left=input.int(50,title="Left Pivot", group=srGroup)
+right=input.int(25,title="Right Pivot", group=srGroup)
+quick_right=input.int(5,title="Quick Right Pivot", group=srGroup)
+
+// HTF stoch
+string stochGroup = "Config . HTF Stochastic RSI"
+smoothK = input.int(3, "K", minval=1, group=stochGroup)
+smoothD = input.int(3, "D", minval=1, group=stochGroup)
+lengthRSI = input.int(14, "RSI Length", minval=1, group=stochGroup)
+lengthStoch = input.int(14, "Stochastic Length", minval=1, group=stochGroup)
+stimeframe = input.timeframe(defval="30", title="Timeframe", group=stochGroup)
+enableStoch = input(true, title="Use HTF Stochastic", tooltip="Lookahead is enabled so be advised that htf stochastic rsi will repaint, so some signals might appear after sometime. Take the signals that appear immediately. oooooor you can disable this option but know that this option will remove some false signals. It will only benefit you not hurt you.", group=stochGroup)
+
+// Trade Session
+ts = input(true, title="Show Sessions", group="Trade Session")
+enableL = input(true, title="London", group="Trade Session")
+enableNY = input(true, title="NewYork", group="Trade Session")
+enableT = input(true, title="Asian", group="Trade Session")
+string dayG = "---------------"
+showMon = input(title="Monday", defval=true, group=dayG)
+showTue = input(title="Tuesday",  defval=true, group=dayG)
+showWed = input(title="Wednesday", defval=true, group=dayG)
+showThu = input(title="Thursday", defval=true, group=dayG)
+showFri = input(title="Friday", defval=true, group=dayG)
+showSat = input(title="Saturday", defval=false, group=dayG)
+showSun = input(title="Sunday", defval=false, group=dayG)
+
+// rejection candles identification
+enableRejectionBar = input(true, "Show Rejection Candles", group="CandleStick - 38.2% Candle", tooltip="Based on a channel on YouTube that's called 'The Trading Channel', Rejection candles are candles that have their body above the 38.2% fib tool.")
+
+string uiGroup = " Config . UI"
+uiMode = input.string(title = "Color Scheme", defval="Dark", options=["Dark", "Light"], group=uiGroup)
+
+
+indexHighTf = barstate.isrealtime ? 1 : 0
+src = close
+
+// stochastic RSI
+stoch() =>
+    rsi1 = ta.rsi(src, lengthRSI)
+    k = ta.sma(ta.stoch(rsi1, rsi1, rsi1, lengthStoch), smoothK)
+    d = ta.sma(k, smoothD)
+    [k, d]
+
+
+[k, d] = request.security(syminfo.tickerid, stimeframe, stoch(), lookahead=barmerge.lookahead_on)
+stochUpCondition = k > d
+stochDnCondition = k < d
+
+
+// RSI & Outback
+_rsi(src, length) =>
+    up = ta.rma(math.max(ta.change(src), 0), length)
+    down = ta.rma(-math.min(ta.change(src), 0), length)
+    rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
+    rsi
+    
+rsi = _rsi(src, rsiLengthInput)
+outbackRsi = _rsi(src, rsiLengthInput1)
+
+trama(length, src) =>
+    ama = 0.
+    hh = math.max(math.sign(ta.change(ta.highest(length))),0)
+    ll = math.max(math.sign(ta.change(ta.lowest(length))*-1),0)
+    tc = math.pow(ta.sma(hh or ll ? 1 : 0,length),2)
+    ama := nz(ama[1]+tc*(src-ama[1]),src)
+    ama
+
+_ma(type, src, length) => 
+    type == "TRAMA" ? trama(length, src) : type == "SMA" ? ta.sma(src, length) : type == "EMA" ? ta.ema(src, length) : type == "Linear" ? ta.linreg(src, length, 0) : trama(length, src)
+    
+ma = _ma(maType, rsi, maLength)
+outbackRSIMa = _ma("SMA", outbackRsi, maLengthInput)
+
+MHULL = ta.wma(2 * ta.wma(rsi,int(length3 * lengthMult) / 2) - ta.wma(rsi, int(length3 * lengthMult)), math.round(math.sqrt(int(length3 * lengthMult))))
+
+outbackUpCondition = enableOutback ? outbackRsi > outbackRSIMa and outbackRsi > MHULL : true
+outbackDnCondition = enableOutback ? outbackRsi < outbackRSIMa and outbackRsi < MHULL : true
+
+upRsiCondition = rsi > ma
+dnRsiCondition = rsi < ma
+
+// ATR
+deltaAtr = mult * ta.atr(atrlen)
+getTrendBands(float src, float delta)=>
+    float upperb    = 0.0
+    float lowerb    = 0.0
+
+    upperb := nz(upperb[1])
+    lowerb := nz(lowerb[1])
+
+    if src > nz(upperb[1])
+        upperb := math.max(nz(upperb[1]), math.max(src, nz(src[1])))
+        lowerb := upperb - delta
+        if lowerb < nz(lowerb[1]) or lowerb > nz(lowerb[1]) and upperb == nz(upperb[1])
+            lowerb := nz(lowerb[1])
+    else if src < nz(lowerb[1])
+        lowerb := math.min(nz(lowerb[1]), math.min(src, nz(src[1])))
+        upperb := lowerb + delta
+        if upperb > nz(upperb[1]) or upperb < nz(upperb[1]) and lowerb == nz(lowerb[1]) 
+            upperb := nz(upperb[1])
+        
+    midb = (lowerb + upperb) / 2
+    [midb, upperb, lowerb]
+    
+[midb, upperb, lowerb] = getTrendBands(atrsrc, deltaAtr)
+
+trendUp = midb > nz(midb[1])
+trendDown = midb < nz(midb[1])
+
+lastState = 0
+lastState := nz(lastState[1])
+lastState := trendUp ? 1 : trendDown ? -1 : nz(lastState[1])
+
+atrUpCondition = trendUp and nz(lastState[1]) == -1
+atrDnCondition = trendDown and nz(lastState[1]) == 1
+
+// TSI
+double_smooth(src, long, short) =>
+	fist_smooth = ta.ema(src, long)
+	ta.ema(fist_smooth, short)
+
+pc = ta.change(src)
+
+double_smoothed_pc = double_smooth(pc, _long, _short)
+double_smoothed_abs_pc = double_smooth(math.abs(pc), _long, _short)
+
+tsi_value = 100 * (double_smoothed_pc / double_smoothed_abs_pc)
+_signal = ta.ema(tsi_value, signal)
+
+tsiUpCondition = tsi_value > _signal
+tsiDnCondition = tsi_value < _signal
+
+// Twin Range Trigger
+smoothrng(x, t, m) =>
+    wper = t * 2 - 1
+    avrng = ta.ema(math.abs(x - x[1]), t)
+    smoothrng = ta.ema(avrng, wper) * m
+    smoothrng
+
+smrng1 = smoothrng(src, per1, mult1)
+smrng2 = smoothrng(src, per2, mult2)
+smrng = (smrng1 + smrng2) / 2
+
+rngfilt(x, r) =>
+    rngfilt = x
+    rngfilt := x > nz(rngfilt[1]) ? x - r < nz(rngfilt[1]) ? nz(rngfilt[1]) : x - r : 
+       x + r > nz(rngfilt[1]) ? nz(rngfilt[1]) : x + r
+    rngfilt
+
+filt = rngfilt(src, smrng)
+
+upward = 0.0
+upward := filt > filt[1] ? nz(upward[1]) + 1 : filt < filt[1] ? 0 : nz(upward[1])
+downward = 0.0
+downward := filt < filt[1] ? nz(downward[1]) + 1 : filt > filt[1] ? 0 : nz(downward[1])
+
+hband = filt + smrng
+lband = filt - smrng
+
+longCond = bool(na)
+shortCond = bool(na)
+longCond := src > filt and src > src[1] and upward > 0 or src > filt and src < src[1] and upward > 0
+shortCond := src < filt and src < src[1] and downward > 0 or src < filt and src > src[1] and downward > 0
+
+CondIni = 0
+CondIni := longCond ? 1 : shortCond ? -1 : CondIni[1]
+
+long = alternative ? atrUpCondition : longCond and CondIni[1] == -1
+short = alternative ? atrDnCondition : shortCond and CondIni[1] == 1
+
+       
+// Session
+tzDayOfWeek = dayofweek(time, "Europe/London")
+
+L = enableL ? time(timeframe.period,"0300-1200") : na
+NY= enableNY ? time(timeframe.period,"0800-1700") : na
+T = enableT ? time(timeframe.period,"2000-0300") : na
+
+active = if ts
+    if tzDayOfWeek == dayofweek.monday and showMon
+        true
+    else if tzDayOfWeek == dayofweek.tuesday and showTue
+        true
+    else if tzDayOfWeek == dayofweek.wednesday and showWed
+        true
+    else if tzDayOfWeek == dayofweek.thursday and showThu
+        true
+    else if tzDayOfWeek == dayofweek.friday and showFri
+        true
+    else if tzDayOfWeek == dayofweek.saturday and showSat
+        true
+    else if tzDayOfWeek == dayofweek.sunday and showSun
+        true
+    else
+        false
+else
+    false
+
+// S&R
+pivot_high = ta.pivothigh(high,left,right)
+pivot_lows = ta.pivotlow(low, left,right)
+
+quick_pivot_high = ta.pivothigh(high,left,quick_right)
+quick_pivot_lows = ta.pivotlow(low, left,quick_right)
+
+level1 = ta.valuewhen(quick_pivot_high, high[quick_right], 0)
+level2 = ta.valuewhen(quick_pivot_lows, low[quick_right], 0)
+level3 = ta.valuewhen(pivot_high, high[right], 0)
+level4 = ta.valuewhen(pivot_lows, low[right], 0)
+level5 = ta.valuewhen(pivot_high, high[right], 1)
+level6 = ta.valuewhen(pivot_lows, low[right], 1)
+level7 = ta.valuewhen(pivot_high, high[right], 2)
+level8 = ta.valuewhen(pivot_lows, low[right], 2)
+
+level1_col = close >= level1 ? color.green : color.red
+level2_col = close >= level2 ? color.green : color.red
+level3_col = close >= level3 ? color.green : color.red
+level4_col = close >= level4 ? color.green : color.red
+level5_col = close >= level5 ? color.green : color.red
+level6_col = close >= level6 ? color.green : color.red
+level7_col = close >= level7 ? color.green : color.red
+level8_col = close >= level8 ? color.green : color.red
+       
+// signal
+confirmed = allowRepainting ? true : barstate.isconfirmed
+
+upSignal = tsiUpCondition and upRsiCondition and long  and confirmed and outbackUpCondition
+dnSignal = tsiDnCondition and dnRsiCondition and short and confirmed and outbackDnCondition
+
+upSignal := enableStoch ? upSignal and stochUpCondition : upSignal
+dnSignal := enableStoch ? dnSignal and stochDnCondition : dnSignal
+
+// plotting
+plotchar(upSignal ? bar_index : na, title="Buy", size=size.tiny, location=location.belowbar, char="🙂")
+plotchar(dnSignal ? bar_index : na, title="Sell", size=size.tiny, location=location.abovebar, char="🙃")
+
+upRejectionCandle = 100 - (((open - low) * 100) / (high - low)) < 38.2 and close >= open
+dnRejectionCandle = 100 - (((high - open) * 100) / (high - low)) < 38.2 and close < open
+
+plotshape(enableRejectionBar ? upRejectionCandle : na, "Bull Rejection Candle", location=location.belowbar, color=color.green, text="Up", textcolor=uiMode=="Dark" ? color.white : color.black)
+plotshape(enableRejectionBar ? dnRejectionCandle : na, "Bear Rejection Candle", location=location.abovebar, color=color.red, text="Down", textcolor=uiMode=="Dark" ? color.white : color.black)
+
+bgcolor(color=not na(L)  and active ? color.new(color.green, 90) : na, title='London Session')
+bgcolor(color=not na(NY) and active ? color.new(color.red, 90) : na, title='New York Session')
+bgcolor(color=not na(T)  and active ? color.new(color.orange, 90) : na, title='Tokyo Session')
+
+plot((showSR) ? level1 : na, title="S&R1", style=plot.style_circles, color=level1_col, show_last=1, linewidth=2, trackprice=true)
+plot((showSR) ? level2 : na, title="S&R2", style=plot.style_circles, color=level2_col, show_last=1, linewidth=2, trackprice=true)
+plot((showSR) ? level3 : na, title="S&R3", style=plot.style_circles, color=level3_col, show_last=1, linewidth=2, trackprice=true)
+plot((showSR) ? level4 : na, title="S&R4", style=plot.style_circles, color=level4_col, show_last=1, linewidth=2, trackprice=true)
+plot((showSR) ? level5 : na, title="S&R5", style=plot.style_circles, color=level5_col, show_last=1, linewidth=2, trackprice=true)
+plot((showSR) ? level6 : na, title="S&R6", style=plot.style_circles, color=level6_col, show_last=1, linewidth=2, trackprice=true)
+plot((showSR) ? level7 : na, title="S&R7", style=plot.style_circles, color=level7_col, show_last=1, linewidth=2, trackprice=true)
+plot((showSR) ? level8 : na, title="S&R8", style=plot.style_circles, color=level8_col, show_last=1, linewidth=2, trackprice=true)
+
+// alert
+if upSignal or dnSignal
+    alert("Happy Trail TTF (Buy | Sell) : alert", alert.freq_once_per_bar_close)

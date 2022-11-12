@@ -1,0 +1,44 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © JadeCapital => Yidu_A_S_O_T_L_J_C
+
+//@version=5
+indicator("ADX")
+adxLength = input(14, title="ADX Length")
+adxThreshold = input(20, title="ADX Threshold")
+candleType = input.string("Jap Candle", title="Candle Type", options=["Jap Candle", "Heiken-Ashi"])
+mode = input.string("Dark", title="UI Mode", options=["Dark", "Light"])
+
+hkClose = (open + high + low + close) / 4
+hkOpen = float(na)
+hkOpen := na(hkOpen[1]) ? (open + close) / 2 : (nz(hkOpen[1]) + nz(hkClose[1])) / 2
+hkHigh = math.max(high, math.max(hkOpen, hkClose))
+hkLow  = math.min(low,  math.min(hkOpen, hkClose))
+
+float TrueRange = na
+float DirectionalMovementPlus = na
+float DirectionalMovementMinus = na
+if candleType == "Heiken-Ashi"
+    TrueRange := math.max(math.max(hkHigh-hkLow, math.abs(hkHigh-nz(hkClose[1]))), math.abs(hkLow-nz(hkClose[1])))
+    DirectionalMovementPlus := hkHigh-nz(hkHigh[1]) > nz(hkLow[1])-hkLow ? math.max(hkHigh-nz(hkHigh[1]), 0): 0
+    DirectionalMovementMinus := nz(hkLow[1])-hkLow > hkHigh-nz(hkHigh[1]) ? math.max(nz(hkLow[1])-hkLow, 0): 0
+if candleType == "Jap Candle"
+    TrueRange := math.max(math.max(high-low, math.abs(high-nz(close[1]))), math.abs(low-nz(close[1])))
+    DirectionalMovementPlus := high-nz(high[1]) > nz(low[1])-low ? math.max(high-nz(high[1]), 0): 0
+    DirectionalMovementMinus := nz(low[1])-low > high-nz(high[1]) ? math.max(nz(low[1])-low, 0): 0
+
+SmoothedTrueRange = 0.0
+SmoothedTrueRange := nz(SmoothedTrueRange[1]) - (nz(SmoothedTrueRange[1])/adxLength) + TrueRange
+
+SmoothedDirectionalMovementPlus = 0.0
+SmoothedDirectionalMovementPlus := nz(SmoothedDirectionalMovementPlus[1]) - (nz(SmoothedDirectionalMovementPlus[1])/adxLength) + DirectionalMovementPlus
+
+SmoothedDirectionalMovementMinus = 0.0
+SmoothedDirectionalMovementMinus := nz(SmoothedDirectionalMovementMinus[1]) - (nz(SmoothedDirectionalMovementMinus[1])/adxLength) + DirectionalMovementMinus
+
+DIPlus = SmoothedDirectionalMovementPlus / SmoothedTrueRange * 100
+DIMinus = SmoothedDirectionalMovementMinus / SmoothedTrueRange * 100
+DX = math.abs(DIPlus-DIMinus) / (DIPlus+DIMinus)*100
+ADX = ta.sma(DX, adxLength)
+
+plot(ADX, color=mode == "Dark" ? color.white : color.black, title="ADX")
+hline(adxThreshold, color=color.gray)
